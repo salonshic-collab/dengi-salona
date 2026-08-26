@@ -8,41 +8,25 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Расходы салона">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="theme-color" content="#F6F4F7" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#141019" media="(prefers-color-scheme: dark)">
-<meta name="color-scheme" content="light dark">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="theme-color" content="#0E0E0E">
+<meta name="color-scheme" content="dark">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" type="image/png" href="favicon.png">
 </head>
 <body>
 <style>
+  /* Фирменная расцветка: чёрный фон, кислотный лайм, мятный текст.
+     Приложение всегда тёмное — светлой версии сознательно нет. */
   :root{
-    --bg:#F6F4F7; --surface:#FFFFFF; --surface-2:#EFEBF2; --line:#E3DCE8;
-    --ink:#1C1620; --ink-2:#6A5F72; --ink-3:#948A9C;
-    --accent:#6B2F4F; --accent-ink:#FFFFFF; --accent-soft:#F4E5EE;
-    --pos:#0E7A66; --pos-soft:#DEF1EB;
-    --neg:#B8492F; --neg-soft:#FAE7E1;
-    --shadow:0 1px 2px rgba(28,22,32,.05), 0 10px 28px rgba(28,22,32,.06);
+    color-scheme:dark;
+    --bg:#0E0E0E; --surface:#171717; --surface-2:#1F1F1F; --line:#2E2E2E;
+    --ink:#E6F5E4; --ink-2:#A6B8A4; --ink-3:#7B8A79;
+    --accent:#C6F24E; --accent-ink:#141A02; --accent-soft:#26330B;
+    --pos:#C6F24E; --pos-soft:#26330B;
+    --neg:#FF8A5C; --neg-soft:#3A1C10;
+    --shadow:0 1px 2px rgba(0,0,0,.5), 0 10px 28px rgba(0,0,0,.45);
     --r:14px;
-  }
-  @media (prefers-color-scheme: dark){
-    :root:not([data-theme="light"]){
-      --bg:#141019; --surface:#1E1924; --surface-2:#282131; --line:#332B3D;
-      --ink:#F3EEF6; --ink-2:#A99FB2; --ink-3:#7C7287;
-      --accent:#E2A2C2; --accent-ink:#2A1220; --accent-soft:#3A2233;
-      --pos:#43CDA7; --pos-soft:#12362F;
-      --neg:#F18B6D; --neg-soft:#3B2119;
-      --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 28px rgba(0,0,0,.35);
-    }
-  }
-  :root[data-theme="dark"]{
-    --bg:#141019; --surface:#1E1924; --surface-2:#282131; --line:#332B3D;
-    --ink:#F3EEF6; --ink-2:#A99FB2; --ink-3:#7C7287;
-    --accent:#E2A2C2; --accent-ink:#2A1220; --accent-soft:#3A2233;
-    --pos:#43CDA7; --pos-soft:#12362F;
-    --neg:#F18B6D; --neg-soft:#3B2119;
-    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 28px rgba(0,0,0,.35);
   }
 
   *{box-sizing:border-box}
