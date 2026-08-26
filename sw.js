@@ -1,4 +1,4 @@
-var CACHE = "dengi-salona-v1";
+var CACHE = "dengi-salona-v2";
 var ASSETS = ["./", "./index.html", "./manifest.webmanifest",
               "./icon-180.png", "./icon-192.png", "./icon-512.png",
               "./icon-512-maskable.png", "./favicon.png"];
