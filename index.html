@@ -112,7 +112,7 @@
   .kpi .card.wide .k-val{font-size:30px}
   .pos{color:var(--pos)} .neg{color:var(--neg)}
 
-  .pill{display:inline-block;font-size:11px;font-weight:600;padding:2px 7px;border-radius:999px}
+  .pill{display:inline-block;font-size:11px;font-weight:600;padding:2px 7px;border-radius:999px;white-space:nowrap}
   .pill.ok{background:var(--pos-soft);color:var(--pos)}
   .pill.bad{background:var(--neg-soft);color:var(--neg)}
   .pill.mut{background:var(--surface-2);color:var(--ink-3)}
@@ -127,6 +127,53 @@
   .bar i{display:block;height:100%;border-radius:4px;background:var(--accent)}
   .bar u{position:absolute;top:-3px;width:2px;height:13px;background:var(--ink-3);border-radius:1px;opacity:.65}
   .brow-sub{font-size:12px;color:var(--ink-3);display:flex;justify-content:space-between;gap:10px}
+
+  /* раскрывающаяся статья */
+  .brow-head{cursor:pointer;-webkit-tap-highlight-color:transparent}
+  .brow-head:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:8px}
+  .chev{
+    width:8px;height:8px;flex:0 0 auto;margin-left:2px;
+    border-right:1.7px solid var(--ink-3);border-bottom:1.7px solid var(--ink-3);
+    transform:translateY(-2px) rotate(45deg);transition:transform .18s ease
+  }
+  .brow-head[aria-expanded="true"] .chev{transform:translateY(1px) rotate(-135deg);border-color:var(--accent)}
+  .brow-name{display:flex;align-items:center;gap:7px;min-width:0}
+  .detail{margin-top:6px;padding-left:1px;border-top:1px dashed var(--line)}
+  .drow{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)}
+  .drow:last-child{border-bottom:0;padding-bottom:2px}
+  .drow .dt{flex:1;min-width:0;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .drow .dt em{font-style:normal;color:var(--ink-3)}
+  .drow .da{font-size:14px;font-weight:600;white-space:nowrap}
+  .drow .del{border:0;background:transparent;color:var(--ink-3);font-size:19px;line-height:1;padding:4px 2px;cursor:pointer}
+  .dnone{font-size:12.5px;color:var(--ink-3);padding:10px 0 2px}
+
+  /* составная полоса: структура расходов за месяц */
+  .stack{display:flex;gap:2px;height:26px;border-radius:7px;overflow:hidden;margin:2px 0 14px}
+  .stack i{
+    display:flex;align-items:center;justify-content:center;min-width:3px;
+    font-size:10.5px;font-weight:700;color:#0E0E0E;letter-spacing:-.01em
+  }
+  .stack i:first-child{border-radius:7px 0 0 7px}
+  .stack i:last-child{border-radius:0 7px 7px 0}
+  .cdot{width:9px;height:9px;border-radius:3px;flex:0 0 auto}
+
+  /* расходящаяся диаграмма: рост и снижение к прошлому месяцу */
+  .dvkey{display:flex;justify-content:space-between;font-size:11px;color:var(--ink-3);padding-bottom:9px;border-bottom:1px solid var(--line)}
+  .dv{padding:11px 0;border-bottom:1px solid var(--line)}
+  .dv:last-child{border-bottom:0;padding-bottom:2px}
+  .dv.total{border-top:1px solid var(--line);border-bottom:0;margin-top:2px}
+  .dv-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+  .dv-name{font-size:14px;min-width:0}
+  .dv-val{font-size:14px;font-weight:600;white-space:nowrap}
+  .dv-track{position:relative;height:14px;margin:7px 0 5px}
+  .dv-track::before{
+    content:"";position:absolute;left:50%;top:0;bottom:0;width:1px;
+    background:var(--line);transform:translateX(-.5px)
+  }
+  .dv-bar{position:absolute;top:3px;height:8px}
+  .dv-bar.up{left:50%;background:var(--neg);border-radius:0 4px 4px 0}
+  .dv-bar.down{background:var(--pos);border-radius:4px 0 0 4px}
+  .dv-sub{font-size:12px;color:var(--ink-3)}
 
   /* сравнение месяцев */
   .cmp{display:grid;grid-template-columns:1fr auto auto;gap:4px 10px;align-items:baseline;padding:10px 0;border-bottom:1px solid var(--line)}
@@ -194,7 +241,6 @@
 <header class="app" id="hdr">
   <div class="brand">
     <h1>Расходы</h1>
-    <span class="sub">факт / план</span>
   </div>
   <div class="monthbar" id="monthbar">
     <button type="button" id="mprev" aria-label="Предыдущий месяц">‹</button>
@@ -240,9 +286,6 @@
     <p class="eyebrow">Что изменилось к прошлому месяцу</p>
     <div class="card" id="cmp"></div>
 
-    <p class="eyebrow">Все расходы месяца</p>
-    <div class="card" id="mops"></div>
-
     <div class="row2">
       <button class="btn ghost" type="button" id="exp-month">Отчёт за месяц</button>
       <button class="btn ghost" type="button" id="exp-ops">Список расходов</button>
@@ -272,10 +315,9 @@
 
     <div class="card">
       <h2>Данные</h2>
-      <p class="hint" id="backup-hint">Раз в месяц делайте резервную копию — файл можно вернуть обратно в приложение.</p>
-      <button class="btn ghost" type="button" id="exp-json">Резервная копия (JSON)</button>
-      <button class="btn ghost" type="button" id="imp-json">Загрузить из копии</button>
-      <button class="btn ghost" type="button" id="show-text">Показать отчёт за месяц текстом</button>
+      <p class="hint" id="backup-hint">Раз в месяц сохраняйте копию — файл со всеми расходами и статьями. Если телефон потеряется или сломается, из этого файла всё вернётся обратно.</p>
+      <button class="btn ghost" type="button" id="exp-json">Сохранить копию всех данных</button>
+      <button class="btn ghost" type="button" id="imp-json">Восстановить из копии</button>
       <button class="btn ghost danger" type="button" id="wipe">Удалить все расходы</button>
     </div>
 
@@ -543,6 +585,48 @@ function wireDelete(root){
   });
 }
 
+/* Категориальная палитра для диаграмм — проверена валидатором
+   на тёмной поверхности #171717: контраст, цветовая слепота, светлота. */
+var SERIES = ["#3987e5","#d95926","#199e70","#c98500","#d55181","#008300","#9085e9","#e66767"];
+function catColor(id){
+  for(var i=0;i<S.cats.length;i++) if(S.cats[i].id===id) return SERIES[i % SERIES.length];
+  return SERIES[0];
+}
+
+var openCats = {};   /* какие статьи сейчас раскрыты */
+
+function detailHTML(catId){
+  var list = entriesOf(cur).filter(function(e){ return e.cat === catId; });
+  if(!list.length) return '<div class="dnone">В этом месяце по этой статье не платили</div>';
+  return list.map(function(e){
+    return '<div class="drow">'
+      + '<span class="dt">' + e.date.split("-").reverse().join(".")
+      + (e.note ? ' · <em>' + esc(e.note) + '</em>' : "") + '</span>'
+      + '<span class="da num">' + money(e.amount) + '</span>'
+      + '<button class="del" type="button" data-del="'+e.id+'" aria-label="Удалить расход">×</button>'
+      + '</div>';
+  }).join("");
+}
+
+/* Структура расходов одной полосой: доля каждой статьи.
+   Подписываем процентом только широкие сегменты — в узких текст не поместится.
+   Опознать статью можно и без цвета: список ниже служит легендой. */
+function stackHTML(a){
+  var seg = catsRanked(a).filter(function(c){ return (a.byCat[c.id]||0) > 0; });
+  if(seg.length < 2 || a.total <= 0) return "";
+  var label = seg.map(function(c){
+    return c.name + " " + pct(a.byCat[c.id]/a.total*100);
+  }).join(", ");
+  return '<div class="stack" role="img" aria-label="Структура расходов: '+esc(label)+'">'
+    + seg.map(function(c){
+        var share = a.byCat[c.id]/a.total*100;
+        return '<i style="width:'+share.toFixed(2)+'%;background:'+catColor(c.id)+'"'
+          + ' title="'+esc(c.name)+' — '+money(a.byCat[c.id])+', '+pct(share)+'">'
+          + (share >= 16 ? pct(share) : "") + '</i>';
+      }).join("")
+    + '</div>';
+}
+
 function barsHTML(a){
   var ranked = catsRanked(a);
   var facts = ranked.map(function(c){ return a.byCat[c.id] || 0; });
@@ -557,21 +641,49 @@ function barsHTML(a){
     } else if(p>0){
       var diff = f - p;
       if(Math.abs(diff) < p*0.02) badge = '<span class="pill mut">в плане</span>';
-      else if(diff > 0) badge = '<span class="pill bad">+'+money(diff)+' к плану</span>';
-      else badge = '<span class="pill ok">−'+money(-diff)+' к плану</span>';
+      else if(diff > 0) badge = '<span class="pill bad">+'+money(diff)+'</span>';
+      else badge = '<span class="pill ok">−'+money(-diff)+'</span>';
     }
+    var open = !!openCats[c.id];
     return '<div class="brow">'
-      + '<div class="brow-top"><span class="brow-name">'+esc(c.name)+'</span>'
+      + '<div class="brow-head" role="button" tabindex="0" data-cat="'+c.id+'" aria-expanded="'+open+'">'
+      + '<div class="brow-top"><span class="brow-name">'
+      + '<i class="cdot" style="background:'+catColor(c.id)+'"></i>'
+      + esc(c.name)+'<i class="chev"></i></span>'
       + '<span class="brow-val num">'+money(f)+'</span></div>'
-      + '<div class="bar"><i style="width:'+(f/max*100).toFixed(1)+'%"></i>'
+      + '<div class="bar"><i style="width:'+(f/max*100).toFixed(1)+'%;background:'+catColor(c.id)+'"></i>'
       + (p>0 ? '<u style="left:'+Math.min(99.5,(p/max*100)).toFixed(1)+'%" title="план"></u>' : "")
       + '</div>'
       + '<div class="brow-sub"><span>'+(p>0 ? "План "+money(p) : "Без плана")+' · '+pct(share)+' от расходов</span>'+badge+'</div>'
+      + '</div>'
+      + '<div class="detail"'+(open ? "" : " hidden")+'>'+(open ? detailHTML(c.id) : "")+'</div>'
       + '</div>';
   }).join("");
-  return rows || '<p class="empty">В этом месяце расходов ещё нет</p>';
+  return rows ? (stackHTML(a) + rows) : '<p class="empty">В этом месяце расходов ещё нет</p>';
 }
 
+/* раскрытие статьи по нажатию */
+function wireBars(root){
+  [].forEach.call(root.querySelectorAll(".brow-head"), function(h){
+    function toggle(){
+      var id = h.dataset.cat;
+      var box = h.parentNode.querySelector(".detail");
+      var open = !openCats[id];
+      openCats[id] = open;
+      h.setAttribute("aria-expanded", open);
+      if(open){ box.innerHTML = detailHTML(id); box.hidden = false; wireDelete(box); }
+      else { box.hidden = true; box.innerHTML = ""; }
+    }
+    h.addEventListener("click", toggle);
+    h.addEventListener("keydown", function(ev){
+      if(ev.key === "Enter" || ev.key === " "){ ev.preventDefault(); toggle(); }
+    });
+  });
+  wireDelete(root);
+}
+
+/* Что изменилось к прошлому месяцу — расходящаяся диаграмма:
+   вправо коралловым растёт, влево лаймом падает, ось нуля посередине. */
 function cmpHTML(){
   var prevKey = shiftMonth(cur, -1);
   var a = agg(cur), b = agg(prevKey);
@@ -581,38 +693,50 @@ function cmpHTML(){
   var rows = S.cats.map(function(c){
     return {name:c.name, now:a.byCat[c.id]||0, was:b.byCat[c.id]||0};
   }).filter(function(r){ return r.now || r.was; });
+  rows.forEach(function(r){ r.d = r.now - r.was; });
+  rows.sort(function(x,y){ return Math.abs(y.d) - Math.abs(x.d); });
 
-  rows.sort(function(x,y){ return Math.abs(y.now-y.was) - Math.abs(x.now-x.was); });
+  var max = 1;
+  rows.forEach(function(r){ max = Math.max(max, Math.abs(r.d)); });
+  max = Math.max(max, Math.abs(a.total - b.total));
 
-  var head = '<div class="cmp" style="border-bottom:1px solid var(--line)">'
-    + '<span class="n" style="color:var(--ink-3);font-size:12px">Статья</span>'
-    + '<span class="a" style="color:var(--ink-3);font-size:12px;font-weight:400">'+esc(mlabel(cur).split(" ")[0])+'</span>'
-    + '<span class="a" style="color:var(--ink-3);font-size:12px;font-weight:400;width:74px">разница</span></div>';
+  function bar(d){
+    var w = Math.abs(d) / max * 50;              // половина ширины = максимум изменения
+    if(Math.abs(d) < max * 0.005) w = 0;
+    if(w > 0 && w < 1.2) w = 1.2;                 // совсем тонкие всё же видно
+    if(!w) return "";
+    return d > 0
+      ? '<i class="dv-bar up" style="width:'+w.toFixed(1)+'%"></i>'
+      : '<i class="dv-bar down" style="left:'+(50-w).toFixed(1)+'%;width:'+w.toFixed(1)+'%"></i>';
+  }
+  function note(r){
+    if(!r.was) return "Новая статья";
+    if(!r.now) return "Было " + money(r.was) + " · в этом месяце не платили";
+    if(r.d === 0) return "Было столько же";
+    return "Было " + money(r.was) + " · " + (r.d>0 ? "больше на " : "меньше на ") + money(Math.abs(r.d));
+  }
+
+  var head = '<div class="dvkey"><span>← стало меньше</span><span>стало больше →</span></div>';
 
   var body = rows.map(function(r){
-    var d = r.now - r.was;
-    var badge;
-    if(!r.was) badge = '<span class="pill mut">новое</span>';
-    else if(!r.now) badge = '<span class="pill ok">не было</span>';
-    else if(Math.abs(d) < r.was*0.02) badge = '<span class="pill mut">так же</span>';
-    else badge = '<span class="pill '+(d>0?"bad":"ok")+'">'+(d>0?"+":"−")+pct(Math.abs(d)/r.was*100).replace("%","")+'%</span>';
-    return '<div class="cmp">'
-      + '<span class="n">'+esc(r.name)+'</span>'
-      + '<span class="a num">'+money(r.now)+'</span>'
-      + '<span class="a">'+badge+'</span>'
-      + '<span class="was">Было в '+esc(monthIn(prevKey))+': '+money(r.was)
-      + (r.was && r.now && d !== 0 ? ' · ' + (d>0?"больше на ":"меньше на ") + money(Math.abs(d)) : "")
-      + '</span></div>';
+    return '<div class="dv">'
+      + '<div class="dv-top"><span class="dv-name">'+esc(r.name)+'</span>'
+      + '<span class="dv-val num">'+money(r.now)+'</span></div>'
+      + '<div class="dv-track">'+bar(r.d)+'</div>'
+      + '<div class="dv-sub">'+note(r)+'</div>'
+      + '</div>';
   }).join("");
 
   var dTot = a.total - b.total;
-  var foot = '<div class="cmp" style="border-top:1px solid var(--line);border-bottom:0;margin-top:2px">'
-    + '<span class="n" style="font-weight:600">Всего</span>'
-    + '<span class="a num" style="font-weight:600">'+money(a.total)+'</span>'
-    + '<span class="a">'+(b.total
-        ? '<span class="pill '+(dTot>0?"bad":"ok")+'">'+(dTot>0?"+":"−")+pct(Math.abs(dTot)/b.total*100).replace("%","")+'%</span>'
-        : '<span class="pill mut">—</span>')+'</span>'
-    + '<span class="was">Было в '+esc(monthIn(prevKey))+': '+money(b.total)+'</span></div>';
+  var foot = '<div class="dv total">'
+    + '<div class="dv-top"><span class="dv-name" style="font-weight:600">Всего</span>'
+    + '<span class="dv-val num">'+money(a.total)+'</span></div>'
+    + '<div class="dv-track">'+bar(dTot)+'</div>'
+    + '<div class="dv-sub">Было ' + money(b.total)
+    + (b.total ? ' · ' + (dTot>0 ? "больше на " : dTot<0 ? "меньше на " : "столько же")
+        + (dTot ? money(Math.abs(dTot)) + " (" + (dTot>0?"+":"−")
+        + pct(Math.abs(dTot)/b.total*100).replace("%","") + "%)" : "") : "")
+    + '</div></div>';
 
   return head + body + foot;
 }
@@ -643,11 +767,10 @@ function renderMonth(){
     + cell("Самая крупная статья", top ? esc(top.name) : "—",
            top ? money(a.byCat[top.id]) + " · " + pct(a.byCat[top.id]/a.total*100) + " всех трат" : "Нет расходов", "", true);
 
-  document.getElementById("bexp").innerHTML = barsHTML(a);
+  var bx = document.getElementById("bexp");
+  bx.innerHTML = barsHTML(a);
+  wireBars(bx);
   document.getElementById("cmp").innerHTML = cmpHTML();
-  var mo = document.getElementById("mops");
-  mo.innerHTML = opsHTML(entriesOf(cur));
-  wireDelete(mo);
 }
 
 function renderHist(){
@@ -761,8 +884,8 @@ function render(){
   if(tab==="more"){
     renderCatEditor();
     document.getElementById("backup-hint").textContent = S.lastBackup
-      ? "Последняя копия: " + S.lastBackup + ". Файл можно вернуть обратно кнопкой ниже."
-      : "Резервной копии ещё не было. Расходы живут в браузере этого устройства — сохраните копию.";
+      ? "Последняя копия: " + S.lastBackup + ". Файл со всеми расходами и статьями — из него всё вернётся обратно."
+      : "Копии ещё не было. Расходы живут только в этом телефоне — сохраните файл, из которого их можно восстановить.";
   }
   var a = agg(cur);
   document.getElementById("mlabel").innerHTML = esc(mlabel(cur))
@@ -926,9 +1049,6 @@ document.getElementById("imp-json").addEventListener("click", function(){
     fr.readAsText(f);
   });
   inp.click();
-});
-document.getElementById("show-text").addEventListener("click", function(){
-  showText("Расходы за " + mlabel(cur), "Выделите текст, скопируйте и вставьте в Excel или Google Таблицы.", monthReportCSV(cur));
 });
 document.getElementById("wipe").addEventListener("click", function(){
   if(!confirm("Удалить все расходы? Статьи и план останутся. Это не отменить.")) return;
