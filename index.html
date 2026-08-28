@@ -245,6 +245,21 @@
   }
   #toast.on{opacity:1;transform:translateX(-50%)}
 
+  /* лист выбора периода */
+  dialog#rng{
+    border:1px solid var(--line);border-radius:18px 18px 0 0;background:var(--surface);color:var(--ink);
+    width:100%;max-width:560px;padding:20px 16px calc(20px + env(safe-area-inset-bottom));
+    margin:auto auto 0;box-shadow:var(--shadow)
+  }
+  dialog#rng::backdrop{background:rgba(0,0,0,.6)}
+  dialog#rng h2{font-size:18px}
+  dialog#rng .hint{font-size:13px;color:var(--ink-3);margin-top:4px}
+  dialog#rng select{appearance:none;-webkit-appearance:none;padding-right:30px;
+    background-image:linear-gradient(45deg,transparent 50%,var(--ink-3) 50%),linear-gradient(135deg,var(--ink-3) 50%,transparent 50%);
+    background-position:calc(100% - 16px) 50%,calc(100% - 11px) 50%;
+    background-size:5px 5px,5px 5px;background-repeat:no-repeat}
+  dialog#rng .row2 > div{min-width:0}
+
 </style>
 
 <header class="app" id="hdr">
@@ -298,10 +313,7 @@
     <p class="eyebrow" id="months-lab">По месяцам</p>
     <div class="card" id="months"></div>
 
-    <div class="row2">
-      <button class="btn ghost" type="button" id="exp-month">Отчёт за месяц</button>
-      <button class="btn ghost" type="button" id="exp-ops">Список расходов</button>
-    </div>
+    <button class="btn ghost" type="button" id="exp-open">Выгрузить в Excel</button>
   </section>
 
   <!-- ЕЩЁ -->
@@ -315,7 +327,6 @@
     <div class="card">
       <h2>Данные</h2>
       <p class="hint" id="backup-hint">Раз в месяц сохраняйте копию — файл со всеми расходами и статьями. Если телефон потеряется или сломается, из этого файла всё вернётся обратно.</p>
-      <button class="btn ghost" type="button" id="exp-all">Выгрузить всю историю в Excel</button>
       <button class="btn ghost" type="button" id="exp-json">Сохранить копию всех данных</button>
       <button class="btn ghost" type="button" id="imp-json">Восстановить из копии</button>
       <button class="btn ghost danger" type="button" id="wipe">Удалить все расходы</button>
@@ -343,6 +354,29 @@
 </nav>
 
 <div id="toast" role="status" aria-live="polite"></div>
+
+<dialog id="rng" aria-label="Период отчёта">
+  <h2>Период отчёта</h2>
+  <p class="hint">Выберите готовый период или задайте свой — файл соберётся за него.</p>
+
+  <div class="chips" id="rng-presets" style="margin-top:14px"></div>
+
+  <div class="row2" style="margin-top:14px">
+    <div>
+      <label class="f" for="rng-from" style="margin-top:0">С месяца</label>
+      <select id="rng-from"></select>
+    </div>
+    <div>
+      <label class="f" for="rng-to" style="margin-top:0">По месяц</label>
+      <select id="rng-to"></select>
+    </div>
+  </div>
+
+  <p class="hint" id="rng-info" style="margin-top:12px"></p>
+
+  <button class="btn" type="button" id="rng-go">Выгрузить в Excel</button>
+  <button class="btn ghost" type="button" id="rng-close">Отмена</button>
+</dialog>
 
 
 <script>
@@ -1036,46 +1070,169 @@ function opsSheet(list){
   });
   return rows;
 }
-document.getElementById("exp-month").addEventListener("click", function(){
-  deliver("Расходы " + mlabel(cur) + ".xlsx",
-          xlsxBlob([{name: mlabel(cur), rows: monthSheet(cur)},
-                    {name: "Список расходов", rows: opsSheet(entriesOf(cur))}]),
-          "Расходы за " + mlabel(cur));
-});
-document.getElementById("exp-ops").addEventListener("click", function(){
-  deliver("Список расходов " + mlabel(cur) + ".xlsx",
-          xlsxBlob([{name: mlabel(cur), rows: opsSheet(entriesOf(cur))}]),
-          "Расходы за " + mlabel(cur));
-});
-document.getElementById("exp-all").addEventListener("click", function(){
+/* ---------- отчёт за период ---------- */
+function monthsBetween(fromKey, toKey){
+  if(fromKey > toKey){ var t = fromKey; fromKey = toKey; toKey = t; }
+  var out = [], k = fromKey, guard = 0;
+  while(k <= toKey && guard++ < 240){ out.push(k); k = shiftMonth(k, 1); }
+  return out;
+}
+/* все месяцы, между которыми есть смысл выбирать: от первой записи до текущего */
+function selectableMonths(){
   var keys = monthsWithData();
-
-  var byMonth = [["Месяц","Расходы","Записей"]], total = 0;
+  var now = iso(new Date()).slice(0,7);
+  var first = keys.length ? keys[0] : now;
+  var last = now;
+  if(keys.length && keys[keys.length-1] > last) last = keys[keys.length-1];
+  if(cur < first) first = cur;
+  if(cur > last) last = cur;
+  return monthsBetween(first, last);
+}
+function rangeLabel(keys){
+  if(!keys.length) return "";
+  if(keys.length === 1) return mlabel(keys[0]);
+  var a = keys[0], b = keys[keys.length-1];
+  if(a.slice(0,4) === b.slice(0,4)){
+    return MONTHS[parseInt(a.slice(5,7),10)-1].replace(/^./, function(c){ return c.toUpperCase(); })
+      + " — " + MONTHS[parseInt(b.slice(5,7),10)-1] + " " + a.slice(0,4);
+  }
+  return mlabel(a) + " — " + mlabel(b);
+}
+/* сводка по статьям за произвольный период */
+function periodSummary(keys){
+  var byCat = {}, total = 0, count = 0;
   keys.forEach(function(k){
-    var a = agg(k); total += a.total;
-    byMonth.push([mlabel(k), a.total, a.count]);
+    var a = agg(k);
+    total += a.total; count += a.count;
+    Object.keys(a.byCat).forEach(function(id){ byCat[id] = (byCat[id]||0) + a.byCat[id]; });
   });
-  byMonth.push(["Итого", total, S.entries.length]);
+  var n = keys.length || 1;
+  var rows = [["Статья","Факт за период","Доля, %","В среднем в месяц","План на месяц","План за период","Отклонение"]];
+  S.cats.slice().sort(function(x,y){ return (byCat[y.id]||0) - (byCat[x.id]||0); }).forEach(function(c){
+    var f = byCat[c.id] || 0, p = Number(c.plan)||0;
+    if(f === 0 && p === 0) return;
+    rows.push([c.name, f, total>0 ? Math.round(f/total*1000)/10 : 0,
+               Math.round(f/n), p, p*n, f - p*n]);
+  });
+  var planM = planTotal();
+  rows.push(["Итого", total, 100, Math.round(total/n), planM, planM*n, total - planM*n]);
+  rows.push(["Месяцев в периоде", n]);
+  rows.push(["Записей", count]);
+  return rows;
+}
+function periodEntries(keys){
+  var set = {};
+  keys.forEach(function(k){ set[k] = 1; });
+  return S.entries.filter(function(e){ return set[mkey(e.date)]; });
+}
+function exportPeriod(keys){
+  if(!keys.length) return;
+  var label = rangeLabel(keys);
+  var sheets = [{name:"Сводка", rows: periodSummary(keys)}];
 
-  var pivot = [["Статья"].concat(keys.map(mlabel)).concat(["Итого","В среднем в месяц"])];
-  S.cats.forEach(function(c){
-    var line = [c.name], sum = 0;
+  if(keys.length > 1){
+    var byMonth = [["Месяц","Расходы","Записей"]], total = 0;
     keys.forEach(function(k){
-      var v = agg(k).byCat[c.id] || 0;
-      sum += v; line.push(v);
+      var a = agg(k); total += a.total;
+      byMonth.push([mlabel(k), a.total, a.count]);
     });
-    if(sum === 0) return;
-    line.push(sum, keys.length ? Math.round(sum/keys.length) : 0);
-    pivot.push(line);
-  });
-  pivot.push(["Всего"].concat(keys.map(function(k){ return agg(k).total; }))
-    .concat([total, keys.length ? Math.round(total/keys.length) : 0]));
+    byMonth.push(["Итого", total, periodEntries(keys).length]);
+    sheets.push({name:"По месяцам", rows: byMonth});
 
-  deliver("Расходы салона — вся история.xlsx",
-          xlsxBlob([{name:"По месяцам", rows: byMonth},
-                    {name:"Статьи по месяцам", rows: pivot},
-                    {name:"Все расходы", rows: opsSheet(S.entries)}]),
-          "Вся история расходов");
+    var pivot = [["Статья"].concat(keys.map(mlabel)).concat(["Итого","В среднем в месяц"])];
+    S.cats.forEach(function(c){
+      var line = [c.name], sum = 0;
+      keys.forEach(function(k){
+        var v = agg(k).byCat[c.id] || 0;
+        sum += v; line.push(v);
+      });
+      if(sum === 0) return;
+      line.push(sum, Math.round(sum/keys.length));
+      pivot.push(line);
+    });
+    pivot.push(["Всего"].concat(keys.map(function(k){ return agg(k).total; }))
+      .concat([total, Math.round(total/keys.length)]));
+    sheets.push({name:"Статьи по месяцам", rows: pivot});
+  }
+
+  sheets.push({name:"Все расходы", rows: opsSheet(periodEntries(keys))});
+  deliver("Расходы " + label + ".xlsx", xlsxBlob(sheets), "Расходы: " + label);
+}
+
+/* ---------- лист выбора периода ---------- */
+var rngDlg   = document.getElementById("rng");
+var rngFrom  = document.getElementById("rng-from");
+var rngTo    = document.getElementById("rng-to");
+
+var PRESETS = [
+  {id:"month", name:"Этот месяц", months:1},
+  {id:"3",     name:"3 месяца",   months:3},
+  {id:"6",     name:"Полгода",    months:6},
+  {id:"12",    name:"Год",        months:12},
+  {id:"all",   name:"Всё время",  months:0}
+];
+function fillMonthSelects(){
+  var list = selectableMonths();
+  var html = list.map(function(k){ return '<option value="'+k+'">'+esc(mlabel(k))+'</option>'; }).join("");
+  rngFrom.innerHTML = html;
+  rngTo.innerHTML = html;
+  return list;
+}
+function applyPreset(p){
+  var list = selectableMonths();
+  var last = cur;
+  if(p.months === 0){
+    rngFrom.value = list[0];
+    rngTo.value = list[list.length-1];
+  } else {
+    var from = shiftMonth(last, -(p.months - 1));
+    if(from < list[0]) from = list[0];
+    rngFrom.value = from;
+    rngTo.value = last;
+  }
+  updateRangeInfo();
+}
+function currentRange(){
+  return monthsBetween(rngFrom.value, rngTo.value);
+}
+function updateRangeInfo(){
+  var keys = currentRange();
+  var total = 0, count = 0;
+  keys.forEach(function(k){ var a = agg(k); total += a.total; count += a.count; });
+  document.getElementById("rng-info").textContent =
+    rangeLabel(keys) + " · " + keys.length + " мес. · " + money(total) + " · " + recs(count);
+  [].forEach.call(document.querySelectorAll("#rng-presets button"), function(b){
+    var p = PRESETS.filter(function(x){ return x.id === b.dataset.r; })[0];
+    var match = false;
+    if(p){
+      var list = selectableMonths();
+      if(p.months === 0) match = (rngFrom.value === list[0] && rngTo.value === list[list.length-1]);
+      else match = (rngTo.value === cur && keys.length === Math.min(p.months, list.length));
+    }
+    b.setAttribute("aria-pressed", match);
+  });
+}
+document.getElementById("rng-presets").innerHTML = PRESETS.map(function(p){
+  return '<button type="button" data-r="'+p.id+'" aria-pressed="false">'+p.name+'</button>';
+}).join("");
+[].forEach.call(document.querySelectorAll("#rng-presets button"), function(b){
+  b.addEventListener("click", function(){
+    applyPreset(PRESETS.filter(function(x){ return x.id === b.dataset.r; })[0]);
+  });
+});
+rngFrom.addEventListener("change", updateRangeInfo);
+rngTo.addEventListener("change", updateRangeInfo);
+
+document.getElementById("exp-open").addEventListener("click", function(){
+  fillMonthSelects();
+  applyPreset(PRESETS[0]);
+  rngDlg.showModal();
+});
+document.getElementById("rng-close").addEventListener("click", function(){ rngDlg.close(); });
+document.getElementById("rng-go").addEventListener("click", function(){
+  var keys = currentRange();
+  rngDlg.close();
+  exportPeriod(keys);
 });
 document.getElementById("exp-json").addEventListener("click", function(){
   S.lastBackup = new Date().toLocaleDateString("ru-RU");
