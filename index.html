@@ -86,6 +86,15 @@
   .amount-wrap{position:relative}
   .amount-wrap .cur{position:absolute;right:14px;top:50%;transform:translateY(-50%);color:var(--ink-3);font-size:20px}
 
+  .seg{display:grid;grid-template-columns:1fr 1fr;gap:6px;background:var(--surface-2);padding:4px;border-radius:12px;margin-bottom:18px}
+  .seg button{
+    border:0;background:transparent;color:var(--ink-2);font:inherit;font-weight:600;font-size:15px;
+    padding:9px 8px;border-radius:9px;cursor:pointer
+  }
+  .seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+  .seg button[aria-pressed="true"][data-t="income"]{color:var(--pos)}
+  .seg button[aria-pressed="true"][data-t="expense"]{color:var(--neg)}
+
   .chips{display:flex;flex-wrap:wrap;gap:7px}
   .chips button{
     font:inherit;font-size:14px;padding:8px 12px;border-radius:999px;cursor:pointer;
@@ -278,13 +287,18 @@
   <!-- ВВОД -->
   <section class="view on" id="view-add">
     <div class="card">
+      <div class="seg" role="group" aria-label="Что записываем">
+        <button type="button" data-t="expense" aria-pressed="true">Расход</button>
+        <button type="button" data-t="income" aria-pressed="false">Поступление</button>
+      </div>
+
       <label class="f" for="amount">Сумма</label>
       <div class="amount-wrap">
         <input id="amount" type="text" inputmode="numeric" autocomplete="off" placeholder="0" aria-label="Сумма">
         <span class="cur">₽</span>
       </div>
 
-      <label class="f">Статья расхода</label>
+      <label class="f" id="cat-lab">Статья расхода</label>
       <div class="chips" id="catchips"></div>
 
       <label class="f" for="edate">Дата</label>
@@ -296,7 +310,7 @@
       <button class="btn" id="addbtn" type="button">Записать расход</button>
     </div>
 
-    <p class="eyebrow">Последние расходы</p>
+    <p class="eyebrow">Последние записи</p>
     <div class="card" id="recent"></div>
   </section>
 
@@ -306,6 +320,9 @@
 
     <p class="eyebrow">На что ушли деньги</p>
     <div class="card" id="bexp"></div>
+
+    <p class="eyebrow" id="incbars-lab">Поступления по статьям</p>
+    <div class="card" id="incbars"></div>
 
     <p class="eyebrow" id="cmp-lab">Что изменилось к прошлому месяцу</p>
     <div class="card" id="cmp"></div>
@@ -321,7 +338,11 @@
     <div class="card">
       <h2>Статьи расходов и план на месяц</h2>
       <div id="ced-exp" style="margin-top:14px"></div>
-      <button class="btn ghost" type="button" id="addcat">+ Добавить статью</button>
+      <button class="btn ghost" type="button" id="addcat">+ Добавить статью расхода</button>
+
+      <h2 style="margin-top:26px">Статьи поступлений</h2>
+      <div id="ced-inc" style="margin-top:14px"></div>
+      <button class="btn ghost" type="button" id="addcat-inc">+ Добавить статью поступления</button>
     </div>
 
     <div class="card">
@@ -329,7 +350,7 @@
       <p class="hint" id="backup-hint">Раз в месяц сохраняйте копию — файл со всеми расходами и статьями. Если телефон потеряется или сломается, из этого файла всё вернётся обратно.</p>
       <button class="btn ghost" type="button" id="exp-json">Сохранить копию всех данных</button>
       <button class="btn ghost" type="button" id="imp-json">Восстановить из копии</button>
-      <button class="btn ghost danger" type="button" id="wipe">Удалить все расходы</button>
+      <button class="btn ghost danger" type="button" id="wipe">Удалить все записи</button>
     </div>
 
     <div class="card">
@@ -396,20 +417,40 @@ var DEFAULT_CATS = [
   {id:"e8", name:"Прочие расходы",        plan:0}
 ];
 
+var DEFAULT_INCOME = [
+  {id:"i1", name:"Продажа услуг",        plan:800000},
+  {id:"i2", name:"Продажа абонементов",  plan:150000},
+  {id:"i3", name:"Продажа товаров",      plan:50000},
+  {id:"i4", name:"Продажа сертификатов", plan:0},
+  {id:"i5", name:"Прочие поступления",   plan:0}
+];
+
 var S;
 var migrated = false;
 function blank(){
-  return {v:2, cats:JSON.parse(JSON.stringify(DEFAULT_CATS)), entries:[], lastBackup:null};
+  return {v:3, cats:JSON.parse(JSON.stringify(DEFAULT_CATS)),
+          incomeCats:JSON.parse(JSON.stringify(DEFAULT_INCOME)), entries:[], lastBackup:null};
 }
-/* перевод со старой версии, где вместе с расходами были поступления:
-   доходы не удаляем, а откладываем в архив — вдруг вернём их позже */
-function toExpenseOnly(d){
-  d.archivedIncome = (d.archivedIncome || []).concat(
-    d.entries.filter(function(e){ return e.type === "income"; }));
-  d.archivedIncomeCats = d.cats.income || d.archivedIncomeCats || [];
-  d.cats = Array.isArray(d.cats.expense) ? d.cats.expense : JSON.parse(JSON.stringify(DEFAULT_CATS));
-  d.entries = d.entries.filter(function(e){ return e.type !== "income"; });
-  d.v = 2;
+/* Перевод со старых версий. Из самой первой статьи лежали в
+   {income:[], expense:[]}; в промежуточной доходы уезжали в архив.
+   Здесь и то и другое раскладывается по нынешним полям. */
+function upgrade(d){
+  if(d.cats && !Array.isArray(d.cats)){
+    d.incomeCats = Array.isArray(d.cats.income) ? d.cats.income : null;
+    d.cats = Array.isArray(d.cats.expense) ? d.cats.expense : JSON.parse(JSON.stringify(DEFAULT_CATS));
+  }
+  if(!d.incomeCats && Array.isArray(d.archivedIncomeCats) && d.archivedIncomeCats.length){
+    d.incomeCats = d.archivedIncomeCats;
+  }
+  if(Array.isArray(d.archivedIncome) && d.archivedIncome.length){
+    d.entries = d.entries.concat(d.archivedIncome);
+  }
+  delete d.archivedIncome; delete d.archivedIncomeCats;
+  if(!Array.isArray(d.incomeCats) || !d.incomeCats.length){
+    d.incomeCats = JSON.parse(JSON.stringify(DEFAULT_INCOME));
+  }
+  d.entries.forEach(function(e){ if(!e.type) e.type = "expense"; });
+  d.v = 3;
   return d;
 }
 function load(){
@@ -418,7 +459,7 @@ function load(){
     if(!raw) return blank();
     var d = JSON.parse(raw);
     if(!d || !Array.isArray(d.entries)) return blank();
-    if(d.cats && !Array.isArray(d.cats)){ toExpenseOnly(d); migrated = true; }
+    if(d.v !== 3 || !Array.isArray(d.incomeCats)){ upgrade(d); migrated = true; }
     if(!Array.isArray(d.cats) || !d.cats.length) d.cats = JSON.parse(JSON.stringify(DEFAULT_CATS));
     return d;
   }catch(e){ return blank(); }
@@ -466,8 +507,10 @@ function esc(s){
     return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c];
   });
 }
+function catList(type){ return type === "income" ? S.incomeCats : S.cats; }
 function catName(id){
-  for(var i=0;i<S.cats.length;i++) if(S.cats[i].id===id) return S.cats[i].name;
+  var all = S.cats.concat(S.incomeCats);
+  for(var i=0;i<all.length;i++) if(all[i].id===id) return all[i].name;
   return "Без статьи";
 }
 /* сколько дней месяца уже прошло — для среднего расхода в день */
@@ -489,16 +532,23 @@ function toast(msg){
 }
 
 /* ---------- агрегация ---------- */
-function entriesOf(k){
-  return S.entries.filter(function(e){ return mkey(e.date) === k; })
+function entriesOf(k, type){
+  return S.entries.filter(function(e){
+      return mkey(e.date) === k && (type ? e.type === type : e.type !== "income");
+    })
     .sort(function(a,b){ return a.date < b.date ? 1 : a.date > b.date ? -1 : (b.createdAt||0)-(a.createdAt||0); });
 }
 function agg(k){
-  var r = {total:0, byCat:{}, count:0};
+  var r = {total:0, byCat:{}, count:0, income:0, incomeByCat:{}, incomeCount:0};
   S.entries.forEach(function(e){
     if(mkey(e.date) !== k) return;
-    r.total += e.amount; r.count++;
-    r.byCat[e.cat] = (r.byCat[e.cat] || 0) + e.amount;
+    if(e.type === "income"){
+      r.income += e.amount; r.incomeCount++;
+      r.incomeByCat[e.cat] = (r.incomeByCat[e.cat] || 0) + e.amount;
+    } else {
+      r.total += e.amount; r.count++;
+      r.byCat[e.cat] = (r.byCat[e.cat] || 0) + e.amount;
+    }
   });
   return r;
 }
@@ -523,6 +573,7 @@ function catsRanked(a){
 var today = new Date();
 var cur = iso(today).slice(0,7);
 var tab = "add";
+var addType = "expense";
 var addCat = S.cats[0] ? S.cats[0].id : null;
 
 /* ---------- вкладки ---------- */
@@ -554,9 +605,26 @@ amountEl.addEventListener("input", function(){
   var digits = amountEl.value.replace(/\D/g, "").slice(0,12);
   amountEl.value = digits ? nf.format(parseInt(digits,10)) : "";
 });
+[].forEach.call(document.querySelectorAll(".seg button"), function(b){
+  b.addEventListener("click", function(){
+    addType = b.dataset.t;
+    [].forEach.call(document.querySelectorAll(".seg button"), function(x){
+      x.setAttribute("aria-pressed", x.dataset.t === addType ? "true" : "false");
+    });
+    var list = catList(addType);
+    addCat = list[0] ? list[0].id : null;
+    document.getElementById("cat-lab").textContent =
+      addType === "income" ? "Статья поступления" : "Статья расхода";
+    document.getElementById("addbtn").textContent =
+      addType === "income" ? "Записать поступление" : "Записать расход";
+    document.getElementById("enote").placeholder =
+      addType === "income" ? "например: подарочные сертификаты" : "например: краска Wella, 6 туб";
+    renderChips();
+  });
+});
 function renderChips(){
   var box = document.getElementById("catchips");
-  box.innerHTML = S.cats.map(function(c){
+  box.innerHTML = catList(addType).map(function(c){
     return '<button type="button" data-cat="'+c.id+'" aria-pressed="'+(c.id===addCat)+'">'+esc(c.name)+'</button>';
   }).join("");
   [].forEach.call(box.querySelectorAll("button"), function(b){
@@ -571,13 +639,13 @@ document.getElementById("addbtn").addEventListener("click", function(){
   if(!addCat){ toast("Выберите статью"); return; }
   var d = document.getElementById("edate").value || iso(new Date());
   S.entries.push({
-    id: uid(), date: d, type: "expense", cat: addCat,
+    id: uid(), date: d, type: addType, cat: addCat,
     amount: amt, note: document.getElementById("enote").value.trim(), createdAt: Date.now()
   });
   save();
   amountEl.value = ""; document.getElementById("enote").value = "";
   cur = mkey(d);
-  toast("Расход " + money(amt) + " записан");
+  toast((addType === "income" ? "Поступление " : "Расход ") + money(amt) + " записано");
   render();
 });
 
@@ -586,11 +654,12 @@ function opsHTML(list, limit){
   var arr = limit ? list.slice(0, limit) : list;
   if(!arr.length) return '<p class="empty">Пока пусто</p>';
   return arr.map(function(e){
+    var inc = e.type === "income";
     return '<div class="op">'
-      + '<span class="dot"></span>'
+      + '<span class="dot" style="background:var(--'+(inc?"pos":"neg")+')"></span>'
       + '<span class="mid"><span class="t1">'+esc(catName(e.cat))+'</span>'
       + '<span class="t2">'+e.date.split("-").reverse().join(".")+(e.note?" · "+esc(e.note):"")+'</span></span>'
-      + '<span class="amt num">'+money(e.amount)+'</span>'
+      + '<span class="amt num'+(inc?" pos":"")+'">'+(inc?"+":"")+money(e.amount)+'</span>'
       + '<button class="del" type="button" data-del="'+e.id+'" aria-label="Удалить">×</button>'
       + '</div>';
   }).join("");
@@ -601,7 +670,8 @@ function wireDelete(root){
       var id = b.dataset.del;
       var e = S.entries.filter(function(x){ return x.id===id; })[0];
       if(!e) return;
-      if(!confirm("Удалить расход " + money(e.amount) + " — " + catName(e.cat) + "?")) return;
+      if(!confirm("Удалить " + (e.type==="income" ? "поступление " : "расход ")
+                  + money(e.amount) + " — " + catName(e.cat) + "?")) return;
       S.entries = S.entries.filter(function(x){ return x.id!==id; });
       save(); toast("Удалено"); render();
     });
@@ -683,6 +753,37 @@ function barsHTML(a){
       + '</div>';
   }).join("");
   return rows ? (stackHTML(a) + rows) : '<p class="empty">В этом месяце расходов ещё нет</p>';
+}
+
+/* Поступления — простым списком: их вносят редко, детализация тут лишняя */
+function incomeBarsHTML(a){
+  var list = S.incomeCats.slice().sort(function(x,y){
+    return (a.incomeByCat[y.id]||0) - (a.incomeByCat[x.id]||0);
+  });
+  var max = 1;
+  list.forEach(function(c){ max = Math.max(max, a.incomeByCat[c.id]||0, Number(c.plan)||0); });
+  var rows = list.map(function(c){
+    var f = a.incomeByCat[c.id] || 0, p = Number(c.plan)||0;
+    if(f === 0 && p === 0) return "";
+    var badge = "";
+    if(p > 0 && f === 0) badge = '<span class="pill mut">пока не было</span>';
+    else if(p > 0){
+      var diff = f - p;
+      if(Math.abs(diff) < p*0.02) badge = '<span class="pill mut">в плане</span>';
+      else if(diff > 0) badge = '<span class="pill ok">+'+money(diff)+'</span>';
+      else badge = '<span class="pill bad">−'+money(-diff)+'</span>';
+    }
+    return '<div class="brow">'
+      + '<div class="brow-top"><span class="brow-name">'+esc(c.name)+'</span>'
+      + '<span class="brow-val num">'+money(f)+'</span></div>'
+      + '<div class="bar"><i style="width:'+(f/max*100).toFixed(1)+'%;background:var(--pos)"></i>'
+      + (p>0 ? '<u style="left:'+Math.min(99.5,(p/max*100)).toFixed(1)+'%"></u>' : "")
+      + '</div>'
+      + '<div class="brow-sub"><span>'+(p>0 ? "План "+money(p) : "Без плана")
+      + ' · '+pct(a.income>0 ? f/a.income*100 : 0)+' поступлений</span>'+badge+'</div>'
+      + '</div>';
+  }).join("");
+  return rows || '<p class="empty">В этом месяце поступлений не было</p>';
 }
 
 /* раскрытие статьи по нажатию */
@@ -778,10 +879,18 @@ function renderMonth(){
   }
   var done = plan>0 ? a.total/plan*100 : 0;
 
+  var incCells = a.income > 0
+    ? cell("Поступления", money(a.income), recs(a.incomeCount), "pos")
+      + cell(a.income - a.total >= 0 ? "Разница" : "Минус",
+             (a.income - a.total < 0 ? "−" : "") + money(Math.abs(a.income - a.total)),
+             "Поступления минус расходы", a.income - a.total >= 0 ? "pos" : "neg")
+    : "";
+
   document.getElementById("kpi").innerHTML =
       cell("Расходы за месяц", money(a.total),
            (plan>0 ? "План " + money(plan) + " · " + pct(done) + " плана" : "План не задан")
            + " · " + recs(a.count), a.total>plan && plan>0 ? "neg" : "", true)
+    + incCells
     + cell(a.total>plan && plan>0 ? "Перерасход" : "Осталось из плана",
            money(Math.abs(plan - a.total)),
            plan>0 ? (a.total>plan ? "Сверх плана месяца" : "Ещё не потрачено") : "Задайте план в «Ещё»",
@@ -793,6 +902,10 @@ function renderMonth(){
   var bx = document.getElementById("bexp");
   bx.innerHTML = barsHTML(a);
   wireBars(bx);
+
+  /* Поступления показываем, только когда они в этом месяце были */
+  show("incbars", a.income > 0);
+  if(a.income > 0) document.getElementById("incbars").innerHTML = incomeBarsHTML(a);
   /* Сравнение и столбики появляются сами, когда им есть что показать */
   var prevHas = agg(shiftMonth(cur,-1)).count > 0;
   show("cmp", prevHas);
@@ -843,44 +956,50 @@ function renderMonths(){
 }
 
 function renderCatEditor(){
-  var box = document.getElementById("ced-exp");
-  box.innerHTML = S.cats.map(function(c){
-    return '<div class="cedit">'
-      + '<input type="text" value="'+esc(c.name)+'" data-cname="'+c.id+'" aria-label="Название статьи">'
-      + '<input type="text" inputmode="numeric" value="'+(Number(c.plan)||0)+'" data-cplan="'+c.id+'" aria-label="План на месяц">'
-      + '<button type="button" data-cdel="'+c.id+'" aria-label="Удалить статью">×</button>'
-      + '</div>';
-  }).join("");
-  [].forEach.call(box.querySelectorAll("[data-cname]"), function(inp){
-    inp.addEventListener("change", function(){
-      var c = S.cats.filter(function(x){return x.id===inp.dataset.cname;})[0];
-      if(c){ c.name = inp.value.trim() || c.name; save(); renderChips(); }
+  [["expense","ced-exp"],["income","ced-inc"]].forEach(function(pair){
+    var type = pair[0], box = document.getElementById(pair[1]);
+    box.innerHTML = catList(type).map(function(c){
+      return '<div class="cedit">'
+        + '<input type="text" value="'+esc(c.name)+'" data-cname="'+c.id+'" data-ct="'+type+'" aria-label="Название статьи">'
+        + '<input type="text" inputmode="numeric" value="'+(Number(c.plan)||0)+'" data-cplan="'+c.id+'" data-ct="'+type+'" aria-label="План на месяц">'
+        + '<button type="button" data-cdel="'+c.id+'" data-ct="'+type+'" aria-label="Удалить статью">×</button>'
+        + '</div>';
+    }).join("");
+    [].forEach.call(box.querySelectorAll("[data-cname]"), function(inp){
+      inp.addEventListener("change", function(){
+        var c = catList(inp.dataset.ct).filter(function(x){ return x.id===inp.dataset.cname; })[0];
+        if(c){ c.name = inp.value.trim() || c.name; save(); renderChips(); }
+      });
     });
-  });
-  [].forEach.call(box.querySelectorAll("[data-cplan]"), function(inp){
-    inp.addEventListener("change", function(){
-      var c = S.cats.filter(function(x){return x.id===inp.dataset.cplan;})[0];
-      if(c){ c.plan = parseInt(inp.value.replace(/\D/g,""),10) || 0; save(); toast("План обновлён"); }
+    [].forEach.call(box.querySelectorAll("[data-cplan]"), function(inp){
+      inp.addEventListener("change", function(){
+        var c = catList(inp.dataset.ct).filter(function(x){ return x.id===inp.dataset.cplan; })[0];
+        if(c){ c.plan = parseInt(inp.value.replace(/\D/g,""),10) || 0; save(); toast("План обновлён"); }
+      });
     });
-  });
-  [].forEach.call(box.querySelectorAll("[data-cdel]"), function(b){
-    b.addEventListener("click", function(){
-      var id = b.dataset.cdel;
-      if(S.cats.length < 2){ toast("Должна остаться хотя бы одна статья"); return; }
-      var used = S.entries.some(function(e){ return e.cat===id; });
-      if(used){ toast("По этой статье есть расходы — сначала удалите их"); return; }
-      S.cats = S.cats.filter(function(x){ return x.id!==id; });
-      if(addCat===id) addCat = S.cats[0] ? S.cats[0].id : null;
-      save(); renderChips(); renderCatEditor();
+    [].forEach.call(box.querySelectorAll("[data-cdel]"), function(b){
+      b.addEventListener("click", function(){
+        var id = b.dataset.cdel, t = b.dataset.ct, list = catList(t);
+        if(list.length < 2){ toast("Должна остаться хотя бы одна статья"); return; }
+        if(S.entries.some(function(e){ return e.cat === id; })){
+          toast("По этой статье есть записи — сначала удалите их"); return;
+        }
+        var rest = list.filter(function(x){ return x.id !== id; });
+        if(t === "income") S.incomeCats = rest; else S.cats = rest;
+        if(addCat === id){ var l = catList(addType); addCat = l[0] ? l[0].id : null; }
+        save(); renderChips(); renderCatEditor();
+      });
     });
   });
 }
-document.getElementById("addcat").addEventListener("click", function(){
-  var name = prompt("Название статьи расхода");
+function addCategory(type){
+  var name = prompt(type === "income" ? "Название статьи поступления" : "Название статьи расхода");
   if(!name) return;
-  S.cats.push({id:uid(), name:name.trim(), plan:0});
+  catList(type).push({id:uid(), name:name.trim(), plan:0});
   save(); renderChips(); renderCatEditor();
-});
+}
+document.getElementById("addcat").addEventListener("click", function(){ addCategory("expense"); });
+document.getElementById("addcat-inc").addEventListener("click", function(){ addCategory("income"); });
 
 function render(){
   if(tab==="add"){
@@ -1118,12 +1237,44 @@ function periodSummary(keys){
   rows.push(["Итого", total, 100, Math.round(total/n), planM, planM*n, total - planM*n]);
   rows.push(["Месяцев в периоде", n]);
   rows.push(["Записей", count]);
+  var income = 0;
+  keys.forEach(function(k){ income += agg(k).income; });
+  if(income > 0){
+    rows.push([]);
+    rows.push(["Поступления за период", income]);
+    rows.push(["Разница", income - total]);
+  }
   return rows;
 }
-function periodEntries(keys){
+function periodEntries(keys, type){
   var set = {};
   keys.forEach(function(k){ set[k] = 1; });
-  return S.entries.filter(function(e){ return set[mkey(e.date)]; });
+  return S.entries.filter(function(e){
+    return set[mkey(e.date)] && (type ? e.type === type : e.type !== "income");
+  });
+}
+/* Лист поступлений собираем только если за период они были */
+function incomeSheet(keys){
+  var byCat = {}, total = 0;
+  keys.forEach(function(k){
+    var a = agg(k);
+    total += a.income;
+    Object.keys(a.incomeByCat).forEach(function(id){ byCat[id] = (byCat[id]||0) + a.incomeByCat[id]; });
+  });
+  if(total === 0) return null;
+  var n = keys.length || 1;
+  var rows = [["Статья","Факт за период","Доля, %","В среднем в месяц","План на месяц","План за период","Отклонение"]];
+  S.incomeCats.slice().sort(function(x,y){ return (byCat[y.id]||0) - (byCat[x.id]||0); }).forEach(function(c){
+    var f = byCat[c.id] || 0, p = Number(c.plan)||0;
+    if(f === 0 && p === 0) return;
+    rows.push([c.name, f, Math.round(f/total*1000)/10, Math.round(f/n), p, p*n, f - p*n]);
+  });
+  var planM = S.incomeCats.reduce(function(sum,c){ return sum + (Number(c.plan)||0); }, 0);
+  rows.push(["Итого", total, 100, Math.round(total/n), planM, planM*n, total - planM*n]);
+  rows.push([]);
+  rows.push(["Все поступления"]);
+  opsSheet(periodEntries(keys, "income")).forEach(function(r){ rows.push(r); });
+  return rows;
 }
 function exportPeriod(keys){
   if(!keys.length) return;
@@ -1155,6 +1306,8 @@ function exportPeriod(keys){
     sheets.push({name:"Статьи по месяцам", rows: pivot});
   }
 
+  var inc = incomeSheet(keys);
+  if(inc) sheets.push({name:"Поступления", rows: inc});
   sheets.push({name:"Все расходы", rows: opsSheet(periodEntries(keys))});
   deliver("Расходы " + label + ".xlsx", xlsxBlob(sheets), "Расходы: " + label);
 }
@@ -1251,9 +1404,8 @@ document.getElementById("imp-json").addEventListener("click", function(){
       try{
         var d = JSON.parse(String(fr.result));
         if(!d || !Array.isArray(d.entries)) throw 0;
-        if(d.cats && !Array.isArray(d.cats)) toExpenseOnly(d);
+        upgrade(d);
         if(!Array.isArray(d.cats) || !d.cats.length) throw 0;
-        d.v = 2;
         if(!confirm("Заменить текущие данные данными из файла? Расходов в файле: " + d.entries.length)) return;
         S = d; save(); toast("Данные загружены"); render();
       }catch(e){ toast("Файл не подошёл — нужен файл копии из этого приложения"); }
@@ -1263,9 +1415,9 @@ document.getElementById("imp-json").addEventListener("click", function(){
   inp.click();
 });
 document.getElementById("wipe").addEventListener("click", function(){
-  if(!confirm("Удалить все расходы? Статьи и план останутся. Это не отменить.")) return;
+  if(!confirm("Удалить все записи — и расходы, и поступления? Статьи и план останутся. Это не отменить.")) return;
   if(!confirm("Точно удалить " + recs(S.entries.length) + "?")) return;
-  S.entries = []; save(); toast("Расходы удалены"); render();
+  S.entries = []; save(); toast("Записи удалены"); render();
 });
 
 /* ---------- старт ---------- */
