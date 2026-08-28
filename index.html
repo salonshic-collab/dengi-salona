@@ -269,6 +269,31 @@
     background-size:5px 5px,5px 5px;background-repeat:no-repeat}
   dialog#rng .row2 > div{min-width:0}
 
+  /* заметка про установку */
+  .note{
+    background:var(--accent-soft);border:1px solid var(--accent);border-radius:var(--r);
+    padding:13px 14px;margin-top:12px;font-size:13.5px;line-height:1.45;color:var(--ink)
+  }
+  .note b{color:var(--accent)}
+  .note button{
+    display:block;margin-top:10px;font:inherit;font-size:13px;cursor:pointer;
+    border:1px solid var(--line);background:var(--surface);color:var(--ink-2);border-radius:9px;padding:7px 12px
+  }
+
+  /* полоса «есть обновление» */
+  #upd{
+    position:fixed;left:50%;transform:translateX(-50%);z-index:60;
+    bottom:calc(84px + env(safe-area-inset-bottom));width:calc(100% - 32px);max-width:528px;
+    display:flex;align-items:center;gap:10px;padding:11px 12px 11px 14px;border-radius:12px;
+    background:var(--accent);color:var(--accent-ink);font-size:14px;font-weight:600;box-shadow:var(--shadow)
+  }
+  #upd[hidden]{display:none}
+  body.has-upd #toast{bottom:calc(146px + env(safe-area-inset-bottom))}
+  #upd button{
+    margin-left:auto;font:inherit;font-size:14px;font-weight:600;border:0;border-radius:9px;cursor:pointer;
+    background:var(--accent-ink);color:var(--accent);padding:8px 14px
+  }
+
 </style>
 
 <header class="app" id="hdr">
@@ -283,6 +308,13 @@
 </header>
 
 <main class="wrap">
+
+  <div class="note" id="install-note" hidden>
+    <b>Установите приложение на телефон.</b>
+    В&nbsp;Safari нажмите «Поделиться» → «На&nbsp;экран „Домой“». Появится иконка, и&nbsp;дальше
+    приложение открывается из&nbsp;памяти телефона — без&nbsp;интернета и&nbsp;без VPN.
+    <button type="button" id="install-hide">Понятно, скрыть</button>
+  </div>
 
   <!-- ВВОД -->
   <section class="view on" id="view-add">
@@ -354,10 +386,19 @@
     </div>
 
     <div class="card">
+      <h2>Работает без интернета</h2>
+      <p class="hint" id="off-hint">Проверяю, сохранено ли приложение в памяти телефона…</p>
+      <p class="hint" id="off-when" style="margin-top:4px"></p>
+      <button class="btn ghost" type="button" id="off-check">Проверить обновление</button>
+    </div>
+
+    <div class="card">
       <h2>Как пользоваться</h2>
       <p class="hint">
-        Откройте эту страницу в Safari → «Поделиться» → «На экран «Домой»». Появится иконка как у обычного приложения.
-        Расходы хранятся в браузере этого устройства и никуда не уходят — поэтому резервная копия не формальность.
+        Откройте эту страницу в&nbsp;Safari → «Поделиться» → «На&nbsp;экран „Домой“». Появится иконка
+        как у&nbsp;обычного приложения. Дальше оно открывается из&nbsp;памяти телефона: интернет и&nbsp;VPN
+        нужны только тогда, когда вы захотите забрать обновление. Расходы хранятся в&nbsp;этом устройстве
+        и&nbsp;никуда не&nbsp;уходят — поэтому резервная копия не&nbsp;формальность.
       </p>
     </div>
   </section>
@@ -373,6 +414,8 @@
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 7.9 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H2a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 4.6 7.9a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V2a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H22a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg>Ещё</button>
   </div>
 </nav>
+
+<div id="upd" role="status" hidden>Готово новое обновление<button type="button" id="upd-go">Обновить</button></div>
 
 <div id="toast" role="status" aria-live="polite"></div>
 
@@ -394,6 +437,8 @@
   </div>
 
   <p class="hint" id="rng-info" style="margin-top:12px"></p>
+  <p class="hint" style="margin-top:8px">Откроется меню телефона: оттуда файл уходит в&nbsp;Телеграм,
+    на&nbsp;почту, в&nbsp;WhatsApp или сохраняется в&nbsp;«Файлы».</p>
 
   <button class="btn" type="button" id="rng-go">Выгрузить в Excel</button>
   <button class="btn ghost" type="button" id="rng-close">Отмена</button>
@@ -1421,17 +1466,110 @@ document.getElementById("wipe").addEventListener("click", function(){
 });
 
 /* ---------- старт ---------- */
+window.appToast = toast;   /* нижний скрипт про офлайн говорит теми же плашками */
 renderChips();
 render();
 })();
 </script>
 
 <script>
-if("serviceWorker" in navigator){
+/* ---------- жизнь без интернета ----------
+   Приложение целиком лежит в памяти телефона: страница, иконки, все расчёты.
+   Сеть нужна ровно в одном месте — забрать обновление. Всё остальное
+   работает в самолёте, в подвале и без VPN. */
+(function(){
+  var say = function(m){ if(window.appToast) window.appToast(m); };
+  var updBar  = document.getElementById("upd");
+  var offHint = document.getElementById("off-hint");
+  var offWhen = document.getElementById("off-when");
+  var note    = document.getElementById("install-note");
+  var checking = false;
+
+  function showUpd(){
+    if(!updBar) return;
+    updBar.hidden = false;
+    document.body.classList.add("has-upd");
+  }
+  function stamp(text){
+    try{ localStorage.setItem("dengi-last-check", new Date().toLocaleDateString("ru-RU") + " · " + text); }catch(e){}
+    showWhen();
+  }
+  function showWhen(){
+    if(!offWhen) return;
+    var v = null;
+    try{ v = localStorage.getItem("dengi-last-check"); }catch(e){}
+    offWhen.textContent = v ? "Последняя проверка обновлений: " + v : "";
+  }
+
+  var standalone = window.navigator.standalone === true
+    || (window.matchMedia && matchMedia("(display-mode: standalone)").matches);
+
+  function setHint(text){ if(offHint) offHint.textContent = text; }
+  showWhen();
+
+  function saved(){
+    setHint(standalone
+      ? "Приложение сохранено в телефоне: открывается и считает без интернета и без VPN. Связь нужна, только чтобы забрать обновление."
+      : "Приложение сохранено в браузере и открывается без интернета. Чтобы оно точно не пропало, установите его на экран «Домой» — как описано ниже.");
+  }
+
+  /* Просим браузер не вычищать данные: иначе iOS может стереть расходы
+     после недели без запусков. Для установленного приложения это не грозит. */
+  if(navigator.storage && navigator.storage.persist){
+    navigator.storage.persisted().then(function(ok){
+      if(!ok) return navigator.storage.persist();
+    }).catch(function(){});
+  }
+
+  if(note && !standalone){
+    if(localStorage.getItem("dengi-install-note") !== "off") note.hidden = false;
+    document.getElementById("install-hide").addEventListener("click", function(){
+      note.hidden = true;
+      try{ localStorage.setItem("dengi-install-note", "off"); }catch(e){}
+    });
+  }
+
+  if(!("serviceWorker" in navigator)){
+    setHint("Этот браузер не умеет сохранять приложение офлайн. На iPhone откройте страницу в Safari.");
+    var b = document.getElementById("off-check"); if(b) b.hidden = true;
+    return;
+  }
+
   addEventListener("load", function(){
-    navigator.serviceWorker.register("sw.js").catch(function(){});
+    navigator.serviceWorker.register("sw.js").then(function(){
+      return navigator.serviceWorker.ready;
+    }).then(saved).catch(function(){
+      setHint("Не удалось сохранить приложение офлайн. Откройте страницу ещё раз при живом интернете.");
+    });
   });
-}
+
+  navigator.serviceWorker.addEventListener("message", function(e){
+    var t = (e.data || {}).type;
+    if(t === "update-ready"){
+      showUpd();
+      stamp("обновление скачано");
+      if(checking){ checking = false; say("Обновление скачано"); }
+    }
+    if(t === "up-to-date"){
+      stamp("была последняя версия");
+      if(checking){ checking = false; say("Установлена последняя версия"); }
+    }
+    if(t === "offline" && checking){ checking = false; say("Связи нет — работаем на сохранённой версии"); }
+  });
+
+  document.getElementById("upd-go").addEventListener("click", function(){ location.reload(); });
+
+  document.getElementById("off-check").addEventListener("click", function(){
+    var sw = navigator.serviceWorker.controller;
+    if(!sw){ location.reload(); return; }
+    checking = true;
+    say("Смотрю, есть ли обновление…");
+    sw.postMessage({type:"check-update"});
+    setTimeout(function(){
+      if(checking){ checking = false; say("Связи нет — работаем на сохранённой версии"); }
+    }, 8000);
+  });
+})();
 </script>
 </body>
 </html>
